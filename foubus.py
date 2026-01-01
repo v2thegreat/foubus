@@ -14,7 +14,7 @@ import sys
 import tempfile
 import threading
 import time
-import traceback
+
 import urllib.parse
 import logging
 
