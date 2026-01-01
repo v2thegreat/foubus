@@ -507,5 +507,5 @@ if __name__ == "__main__":
     th.start()
 
     server = http.server.ThreadingHTTPServer(("", SERVER_PORT), RequestHandler)
-    logging.info("Server started at port %d", SERVER_PORT)
+    logging.info(f"Server started at port {SERVER_PORT}")
     server.serve_forever()
