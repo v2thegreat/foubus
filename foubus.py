@@ -64,7 +64,7 @@ def download():
                     "%a, %d %b %Y %H:%M:%S GMT", time.gmtime(mtime)
                 )
             }
-        logging.info("If-Modified-Since: {}", headers.get("If-Modified-Since"))
+        logging.info(f"If-Modified-Since: {headers.get('If-Modified-Since')}")
 
         resp = http_pool.request(
             "GET",
@@ -73,9 +73,7 @@ def download():
             timeout=3600.0,
             preload_content=False,
         )
-        logging.info(
-            "Response: {} {} (headers: {})", resp.status, resp.reason, resp.headers
-        )
+        logging.info(f"Response: {resp.status} {resp.reason} (headers: {resp.headers})")
 
         if resp.status == 304:
             revalidated = datetime.datetime.now()
@@ -90,7 +88,7 @@ def download():
             with tempfile.NamedTemporaryFile(
                 dir=".", prefix=os.path.basename(url) + "-", delete=False
             ) as f:
-                logging.info("Downloading to {}", f.name)
+                logging.info(f"Downloading to {f.name}")
                 while chunk := resp.read(1024 * 1024):  # 1 MB chunks
                     f.write(chunk)
 
@@ -98,7 +96,7 @@ def download():
 
             os.utime(f.name, (last_modified, last_modified))
             os.rename(f.name, os.path.basename(url))
-            logging.info("Saved to {}", os.path.basename(url))
+            logging.info(f"Saved to {os.path.basename(url)}")
 
             revalidated = datetime.datetime.now()
         else:
@@ -124,7 +122,7 @@ def build_stop_timetable(date):
             tt.to_json(f"{d}/stop-{stop_id}.json")
             tt.to_pickle(f"{d}/stop-{stop_id}.pickle")
             tt.to_html(f"{d}/stop-{stop_id}.html")
-            logging.info("Built stop {} ({})", stop_id, stop_name)
+            logging.info(f"Built stop {stop_id} ({stop_name})")
         try:
             shutil.rmtree("stop_timetable/")
         except FileNotFoundError:
@@ -202,11 +200,7 @@ def apply_realtime(
         timeout=10.0,
     )
     logging.info(
-        "Response: {} {} (headers: {}, size: {})",
-        resp.status,
-        resp.reason,
-        resp.headers,
-        len(resp.data),
+        f"Response: {resp.status} {resp.reason} (headers: {resp.headers}, size: {len(resp.data)})"
     )
     if resp.status != 200:
         logging.warning("Response error: {!r}", resp.data.decode("utf-8", "replace"))
@@ -215,18 +209,10 @@ def apply_realtime(
     with open("tripUpdates.textproto", "w") as f:
         f.write(str(fm))
     logging.info(
-        "TripUpdates header: {} (timestamp {}, age {} seconds)",
-        text_format.MessageToString(fm.header, as_one_line=True),
-        datetime.datetime.fromtimestamp(fm.header.timestamp),
-        (
-            datetime.datetime.now()
-            - datetime.datetime.fromtimestamp(fm.header.timestamp)
-        ).total_seconds(),
+        f"TripUpdates header: {text_format.MessageToString(fm.header, as_one_line=True)} (timestamp {datetime.datetime.fromtimestamp(fm.header.timestamp)}, age {(datetime.datetime.now() - datetime.datetime.fromtimestamp(fm.header.timestamp)).total_seconds()} seconds)"
     )
     logging.info(
-        "TripUpdates: {} entity, {} stop_time_update",
-        len(fm.entity),
-        sum(len(e.trip_update.stop_time_update) for e in fm.entity),
+        f"TripUpdates: {len(fm.entity)} entity, {sum(len(e.trip_update.stop_time_update) for e in fm.entity)} stop_time_update"
     )
 
     updates = 0
@@ -234,10 +220,7 @@ def apply_realtime(
         assert entity.trip_update.trip.trip_id, str(entity)
         if (tt["trip_id"] == entity.trip_update.trip.trip_id).any():
             logging.info(
-                "trip_update for {}: {}: {} stop_time_update",
-                entity.trip_update.trip.trip_id,
-                text_format.MessageToString(entity.trip_update.trip, as_one_line=True),
-                len(entity.trip_update.stop_time_update),
+                f"trip_update for {entity.trip_update.trip.trip_id}: {text_format.MessageToString(entity.trip_update.trip, as_one_line=True)}: {len(entity.trip_update.stop_time_update)} stop_time_update"
             )
             last_stop_sequence = None
             for stu in entity.trip_update.stop_time_update:
@@ -266,11 +249,7 @@ def apply_realtime(
                     # logging.info(stu)
                     if not stu.departure.time:
                         logging.warning(
-                            "No departure time: trip: {} stop_time_update: {}",
-                            text_format.MessageToString(
-                                entity.trip_update.trip, as_one_line=True
-                            ),
-                            text_format.MessageToString(stu, as_one_line=True),
+                            f"No departure time: trip: {text_format.MessageToString(entity.trip_update.trip, as_one_line=True)} stop_time_update: {text_format.MessageToString(stu, as_one_line=True)}"
                         )
                     else:
                         # row.loc[:,'realtime'] = stu.departure.time
@@ -287,7 +266,7 @@ def apply_realtime(
                         logging.info(row)
                         updates += 1
 
-    logging.info("TripUpdates for us: {}", updates)
+    logging.info(f"TripUpdates for us: {updates}")
     return tt
 
 
@@ -300,28 +279,28 @@ def next_trips(routes, tt, now):
         tt["stop_name"].map(STOPS), unit="min"
     )
     for (_, _, trip_label), _ in routes.iterrows():
-        logging.info("= {} =", trip_label)
+        logging.info(f"= {trip_label} =")
         trips = list(
             tt[
                 (tt["trip_label"] == trip_label)
                 & (tt["leave_in"].apply(pd.Timedelta.total_seconds) >= 0)
             ][:2].itertuples()
         )
-        logging.info("Trips: {}", trips)
+        logging.info(f"Trips: {trips}")
         if len(trips) == 0:
             pass
         elif len(trips) == 1:
             tt.loc[pd.Index([trips[0].Index]), "next"] = True
             tt.loc[pd.Index([trips[0].Index]), "last"] = True
         elif len(trips) >= 2:
-            logging.info("Trip 2+ at index: {}", pd.Index([trips[0].Index]))
+            logging.info(f"Trip 2+ at index: {pd.Index([trips[0].Index])}")
             tt.loc[pd.Index([trips[0].Index]), "next"] = True
     tt = tt[tt["next"]]
 
     tt["leave_in"] = tt["leave_in"].dt.floor("min")
 
-    logging.info("Next trips leave: {}", tt)
-    logging.info("Next trips next: {}", tt["next"])
+    logging.info(f"Next trips leave: {tt}")
+    logging.info(f"Next trips next: {tt['next']}")
     return tt
 
 
@@ -520,7 +499,7 @@ if __name__ == "__main__":
                 with g_lock:
                     g_tt = load_pickle()
         except Exception:
-            traceback.logging.info_exc()
+            logging.exception("Build thread error")
             os.abort()
 
     th = threading.Thread(target=_build_thread, name="build thread")
