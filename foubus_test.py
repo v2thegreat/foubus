@@ -11,7 +11,6 @@ import threading
 import unittest
 
 import pandas as pd
-import logging
 
 import foubus
 
@@ -30,11 +29,11 @@ class FoubusTest(unittest.TestCase):
         # Exercise the download code, but then immediately replace with a
         # snapshot which matches the dates hardcoded in this test.
         foubus.download()
-        shutil.copy('testdata/gtfs_stm-2024-12-12.zip', 'gtfs_stm.zip')
+        shutil.copy("testdata/gtfs_stm-2024-12-12.zip", "gtfs_stm.zip")
         foubus.build_stop_timetable(datetime.date(2025, 1, 18))
         with open("stm-apikey.txt", "w"):
             pass
-        curses.setupterm(term='xterm-256color')
+        curses.setupterm(term="xterm-256color")
 
     def testRealtime(self):
         """
