@@ -16,21 +16,18 @@ import threading
 import time
 import traceback
 import urllib.parse
+import logging
 
 import gtfs_kit
 import pandas as pd
 import urllib3
 from google.protobuf import text_format
 from google.transit import gtfs_realtime_pb2
-from loguru import logger
 
 # Configure loguru
-logger.remove()  # Remove default handler
-logger.add(
-    sys.stderr,
-    format="{time:YYYY-MM-DD HH:mm:ss} [{file}:{line}] [{name}] [{thread.name}] {level}: {message}",
-    level="INFO",
-)
+LOG_FORMAT = "%(asctime)s [%(filename)s:%(lineno)d] [%(name)s] [%(threadName)s] %(levelname)s: %(message)s"
+logging.basicConfig(stream=sys.stderr, level=logging.INFO, format=LOG_FORMAT)
+logging.getlogging("urllib3").setLevel(logging.DEBUG)
 
 http_pool = urllib3.PoolManager()
 revalidated = datetime.datetime.min
@@ -58,7 +55,7 @@ def download():
     if datetime.datetime.now() >= (revalidated + datetime.timedelta(hours=24)).replace(
         hour=3
     ):
-        logger.info(f"Revalidating (last at {revalidated})")
+        logging.info(f"Revalidating (last at {revalidated})")
 
         url = "https://www.stm.info/sites/default/files/gtfs/gtfs_stm.zip"
 
@@ -72,7 +69,7 @@ def download():
                     "%a, %d %b %Y %H:%M:%S GMT", time.gmtime(mtime)
                 )
             }
-        logger.info("If-Modified-Since: {}", headers.get("If-Modified-Since"))
+        logging.info("If-Modified-Since: {}", headers.get("If-Modified-Since"))
 
         resp = http_pool.request(
             "GET",
@@ -81,7 +78,7 @@ def download():
             timeout=3600.0,
             preload_content=False,
         )
-        logger.info(
+        logging.info(
             "Response: {} {} (headers: {})", resp.status, resp.reason, resp.headers
         )
 
@@ -98,7 +95,7 @@ def download():
             with tempfile.NamedTemporaryFile(
                 dir=".", prefix=os.path.basename(url) + "-", delete=False
             ) as f:
-                logger.info("Downloading to {}", f.name)
+                logging.info("Downloading to {}", f.name)
                 while chunk := resp.read(1024 * 1024):  # 1 MB chunks
                     f.write(chunk)
 
@@ -106,7 +103,7 @@ def download():
 
             os.utime(f.name, (last_modified, last_modified))
             os.rename(f.name, os.path.basename(url))
-            logger.info("Saved to {}", os.path.basename(url))
+            logging.info("Saved to {}", os.path.basename(url))
 
             revalidated = datetime.datetime.now()
         else:
@@ -115,9 +112,9 @@ def download():
 
 def build_stop_timetable(date):
     """Run at 6am"""
-    logger.info("Reading feed...")
+    logging.info("Reading feed...")
     feed = gtfs_kit.read_feed("gtfs_stm.zip", dist_units="m")
-    logger.info("Feed loaded")
+    logging.info("Feed loaded")
 
     stops = feed.stops[feed.stops["stop_name"].isin(STOPS)]
     feed.stop_times = feed.stop_times[feed.stop_times["stop_id"].isin(stops["stop_id"])]
@@ -132,7 +129,7 @@ def build_stop_timetable(date):
             tt.to_json(f"{d}/stop-{stop_id}.json")
             tt.to_pickle(f"{d}/stop-{stop_id}.pickle")
             tt.to_html(f"{d}/stop-{stop_id}.html")
-            logger.info("Built stop {} ({})", stop_id, stop_name)
+            logging.info("Built stop {} ({})", stop_id, stop_name)
         try:
             shutil.rmtree("stop_timetable/")
         except FileNotFoundError:
@@ -207,7 +204,7 @@ def apply_realtime(tt, now, url=REALTIME_API_URL):
         headers={"Apikey": open("stm-apikey.txt").read().strip()},
         timeout=10.0,
     )
-    logger.info(
+    logging.info(
         "Response: {} {} (headers: {}, size: {})",
         resp.status,
         resp.reason,
@@ -215,12 +212,12 @@ def apply_realtime(tt, now, url=REALTIME_API_URL):
         len(resp.data),
     )
     if resp.status != 200:
-        logger.warning("Response error: {!r}", resp.data.decode("utf-8", "replace"))
+        logging.warning("Response error: {!r}", resp.data.decode("utf-8", "replace"))
         raise ValueError(str(resp.status))
     fm = gtfs_realtime_pb2.FeedMessage.FromString(resp.data)
     with open("tripUpdates.textproto", "w") as f:
         f.write(str(fm))
-    logger.info(
+    logging.info(
         "TripUpdates header: {} (timestamp {}, age {} seconds)",
         text_format.MessageToString(fm.header, as_one_line=True),
         datetime.datetime.fromtimestamp(fm.header.timestamp),
@@ -229,7 +226,7 @@ def apply_realtime(tt, now, url=REALTIME_API_URL):
             - datetime.datetime.fromtimestamp(fm.header.timestamp)
         ).total_seconds(),
     )
-    logger.info(
+    logging.info(
         "TripUpdates: {} entity, {} stop_time_update",
         len(fm.entity),
         sum(len(e.trip_update.stop_time_update) for e in fm.entity),
@@ -239,7 +236,7 @@ def apply_realtime(tt, now, url=REALTIME_API_URL):
     for entity in fm.entity:
         assert entity.trip_update.trip.trip_id, str(entity)
         if (tt["trip_id"] == entity.trip_update.trip.trip_id).any():
-            logger.info(
+            logging.info(
                 "trip_update for {}: {}: {} stop_time_update",
                 entity.trip_update.trip.trip_id,
                 text_format.MessageToString(entity.trip_update.trip, as_one_line=True),
@@ -268,10 +265,10 @@ def apply_realtime(tt, now, url=REALTIME_API_URL):
                 ]
                 if not row.empty:
                     assert len(row) == 1, row
-                    # logger.info(row)
-                    # logger.info(stu)
+                    # logging.info(row)
+                    # logging.info(stu)
                     if not stu.departure.time:
-                        logger.warning(
+                        logging.warning(
                             "No departure time: trip: {} stop_time_update: {}",
                             text_format.MessageToString(
                                 entity.trip_update.trip, as_one_line=True
@@ -290,10 +287,10 @@ def apply_realtime(tt, now, url=REALTIME_API_URL):
                             True,
                             datetime.datetime.fromtimestamp(stu.departure.time) - now,
                         ]
-                        logger.info(row)
+                        logging.info(row)
                         updates += 1
 
-    logger.info("TripUpdates for us: {}", updates)
+    logging.info("TripUpdates for us: {}", updates)
     return tt
 
 
@@ -306,28 +303,28 @@ def next_trips(routes, tt, now):
         tt["stop_name"].map(STOPS), unit="min"
     )
     for (_, _, trip_label), _ in routes.iterrows():
-        logger.info("= {} =", trip_label)
+        logging.info("= {} =", trip_label)
         trips = list(
             tt[
                 (tt["trip_label"] == trip_label)
                 & (tt["leave_in"].apply(pd.Timedelta.total_seconds) >= 0)
             ][:2].itertuples()
         )
-        logger.info("Trips: {}", trips)
+        logging.info("Trips: {}", trips)
         if len(trips) == 0:
             pass
         elif len(trips) == 1:
             tt.loc[pd.Index([trips[0].Index]), "next"] = True
             tt.loc[pd.Index([trips[0].Index]), "last"] = True
         elif len(trips) >= 2:
-            logger.info("Trip 2+ at index: {}", pd.Index([trips[0].Index]))
+            logging.info("Trip 2+ at index: {}", pd.Index([trips[0].Index]))
             tt.loc[pd.Index([trips[0].Index]), "next"] = True
     tt = tt[tt["next"]]
 
     tt["leave_in"] = tt["leave_in"].dt.floor("min")
 
-    logger.info("Next trips leave: {}", tt)
-    logger.info("Next trips next: {}", tt["next"])
+    logging.info("Next trips leave: {}", tt)
+    logging.info("Next trips next: {}", tt["next"])
     return tt
 
 
@@ -423,12 +420,12 @@ def render(html, term, routes, nexts, now, warnings):
     term.write(curses.tparm(curses.tigetstr("cup"), 0, 0))
     term.write(curses.tparm(curses.tigetstr("ed"), 2))
 
-    logger.info(routes)
+    logging.info(routes)
     evenodd = itertools.cycle(["even", "odd"])
     trip_index = 0
 
     for (route_id, _, trip_label), _ in routes.iterrows():
-        logger.info(f"= {trip_label} =")
+        logging.info(f"= {trip_label} =")
         rt = nexts[
             (nexts["trip_label"] == trip_label) & (nexts["departure_time_dt"] >= now)
         ][:2]
@@ -443,7 +440,7 @@ def render(html, term, routes, nexts, now, warnings):
         is_even = next(evenodd) == "even"
         classes.append("even" if is_even else "odd")
 
-        logger.info(rt)
+        logging.info(rt)
 
         # Render to HTML
         html.write(f'<div class="{" ".join(classes)}">\n')
@@ -500,7 +497,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urllib.parse.urlparse(self.path).path
-        logger.debug(f"Request: {path}")
+        logging.debug(f"Request: {path}")
 
         try:
             if path in ["/", "/realtime.png"]:
@@ -510,7 +507,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                     with open(file_path, "rb") as f:
                         data = f.read()
                 except FileNotFoundError:
-                    logger.warning(f"File not found: {file_path}")
+                    logging.warning(f"File not found: {file_path}")
                     self._send_response(b"File not found", "text/plain", 404)
                 else:
                     content_type, _ = mimetypes.guess_type(file_path)
@@ -530,7 +527,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                 try:
                     tt = apply_realtime(tt, now)
                 except Exception as e:
-                    logger.warning(f"Error applying realtime: {e}")
+                    logging.warning(f"Error applying realtime: {e}")
                     warnings.append("Error applying realtime: " + str(e))
                 nexts = next_trips(routes, tt, now)
                 html = io.StringIO()
@@ -551,7 +548,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                 self._send_response(b"", None, 404)
 
         except Exception as e:
-            logger.error(f"Error handling request {path}: {e}")
+            logging.error(f"Error handling request {path}: {e}")
             try:
                 self._send_response(
                     f"Internal Server Error: {e}".encode("utf-8"), "text/plain", 500
@@ -581,7 +578,7 @@ if __name__ == "__main__":
                 with g_lock:
                     g_tt = load_pickle()
         except Exception:
-            traceback.logger.info_exc()
+            traceback.logging.info_exc()
             os.abort()
 
     th = threading.Thread(target=_build_thread, name="build thread")
@@ -589,5 +586,5 @@ if __name__ == "__main__":
     th.start()
 
     server = http.server.ThreadingHTTPServer(("", SERVER_PORT), RequestHandler)
-    logger.info("Server started at port %d", SERVER_PORT)
+    logging.info("Server started at port %d", SERVER_PORT)
     server.serve_forever()
