@@ -42,11 +42,7 @@ STOPS = {
     "Notre-Dame / Place Saint-Henri": 8,
 }
 
-# Configuration constants
 SERVER_PORT = 8000
-
-# GTFS feed URL
-REALTIME_API_URL = "https://api.stm.info/pub/od/gtfs-rt/ic/v2/tripUpdates"
 
 
 def download():
@@ -197,7 +193,9 @@ def decorate_timetable(tt, now):
     return routes, tt
 
 
-def apply_realtime(tt, now, url=REALTIME_API_URL):
+def apply_realtime(
+    tt, now, url="https://api.stm.info/pub/od/gtfs-rt/ic/v2/tripUpdates"
+):
     resp = http_pool.request(
         "GET",
         url,
