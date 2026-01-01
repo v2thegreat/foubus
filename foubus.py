@@ -24,7 +24,6 @@ import urllib3
 from google.protobuf import text_format
 from google.transit import gtfs_realtime_pb2
 
-# Configure loguru
 LOG_FORMAT = "%(asctime)s [%(filename)s:%(lineno)d] [%(name)s] [%(threadName)s] %(levelname)s: %(message)s"
 logging.basicConfig(stream=sys.stderr, level=logging.INFO, format=LOG_FORMAT)
 logging.getLogger("urllib3").setLevel(logging.DEBUG)
