@@ -25,7 +25,7 @@ class FoubusTest(unittest.TestCase):
         os.symlink(os.path.relpath("style.css", d), f"{d}/style.css")
         os.chdir(d)
         foubus.download()
-        foubus.build_stop_timetable(datetime.date(2025, 12, 24))
+        foubus.build_stop_timetable(datetime.date(2025, 1, 18))
         with open("stm-apikey.txt", "w"):
             pass
 
