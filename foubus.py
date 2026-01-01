@@ -46,41 +46,21 @@ STOPS = {
 }
 
 # Configuration constants
-REVALIDATION_INTERVAL_HOURS = 24
-REVALIDATION_HOUR = 3
-REBUILD_HOUR = 6
-TIMEZONE_OFFSET_HOURS = 5  # Hours to subtract for date calculation
 SERVER_PORT = 8000
 
-# Network timeouts
-DOWNLOAD_TIMEOUT_SECONDS = 3600.0
-REALTIME_TIMEOUT_SECONDS = 10.0
-
-# File processing
-DOWNLOAD_CHUNK_SIZE = 1024 * 1024  # 1MB
-
-# Time constants
-SECONDS_PER_MINUTE = 60
-SECONDS_PER_HOUR = 3600
-
-# Terminal colors
-ORANGE_LINE_COLOR = 214
-ALTERNATE_BG_COLOR = 87
-
 # GTFS feed URL
-GTFS_FEED_URL = "https://www.stm.info/sites/default/files/gtfs/gtfs_stm.zip"
 REALTIME_API_URL = "https://api.stm.info/pub/od/gtfs-rt/ic/v2/tripUpdates"
 
 
 def download():
     global revalidated
 
-    if datetime.datetime.now() >= (
-        revalidated + datetime.timedelta(hours=REVALIDATION_INTERVAL_HOURS)
-    ).replace(hour=REVALIDATION_HOUR):
+    if datetime.datetime.now() >= (revalidated + datetime.timedelta(hours=24)).replace(
+        hour=3
+    ):
         logger.info(f"Revalidating (last at {revalidated})")
 
-        url = GTFS_FEED_URL
+        url = "https://www.stm.info/sites/default/files/gtfs/gtfs_stm.zip"
 
         try:
             mtime = os.path.getmtime(os.path.basename(url))
@@ -98,7 +78,7 @@ def download():
             "GET",
             url,
             headers=headers,
-            timeout=DOWNLOAD_TIMEOUT_SECONDS,
+            timeout=3600.0,
             preload_content=False,
         )
         logger.info(
@@ -119,7 +99,7 @@ def download():
                 dir=".", prefix=os.path.basename(url) + "-", delete=False
             ) as f:
                 logger.info("Downloading to {}", f.name)
-                while chunk := resp.read(DOWNLOAD_CHUNK_SIZE):
+                while chunk := resp.read(1024 * 1024):  # 1 MB chunks
                     f.write(chunk)
 
             resp.release_conn()
@@ -225,7 +205,7 @@ def apply_realtime(tt, now, url=REALTIME_API_URL):
         "GET",
         url,
         headers={"Apikey": open("stm-apikey.txt").read().strip()},
-        timeout=REALTIME_TIMEOUT_SECONDS,
+        timeout=10.0,
     )
     logger.info(
         "Response: {} {} (headers: {}, size: {})",
@@ -356,14 +336,14 @@ def _format_time_display(total_seconds):
 
     Returns tuple of (html_display, terminal_display).
     """
-    if total_seconds < SECONDS_PER_MINUTE:
+    if total_seconds < 60:
         return "Now", "Now"
-    elif total_seconds < SECONDS_PER_HOUR:
-        delta_minutes = total_seconds // SECONDS_PER_MINUTE
+    elif total_seconds < 3600:
+        delta_minutes = total_seconds // 60
         return f"{delta_minutes} min", f"{delta_minutes:4} min"
     else:
-        delta_hours = total_seconds // SECONDS_PER_HOUR
-        delta_minutes = (total_seconds % SECONDS_PER_HOUR) // SECONDS_PER_MINUTE
+        delta_hours = total_seconds // 3600
+        delta_minutes = (total_seconds % 3600) // 60
         return (
             f"{delta_hours} hr {delta_minutes} min",
             f"{delta_hours} hr {delta_minutes} min",
@@ -407,10 +387,10 @@ def _render_route_terminal(term, trip_label, rt, route_id, is_even):
         term.write(curses.tparm(curses.tigetstr("setab"), curses.COLOR_WHITE))
     elif route_id == "2":
         # https://en.wikipedia.org/wiki/ANSI_escape_code#8-bit
-        term.write(curses.tparm(curses.tigetstr("setab"), ORANGE_LINE_COLOR))
+        term.write(curses.tparm(curses.tigetstr("setab"), 214))
         term.write(curses.tparm(curses.tigetstr("setaf"), curses.COLOR_BLACK))
     else:
-        bg = curses.COLOR_BLUE if is_even else ALTERNATE_BG_COLOR
+        bg = curses.COLOR_BLUE if is_even else 87
         term.write(curses.tparm(curses.tigetstr("setab"), bg))
         fg = curses.COLOR_WHITE if is_even else curses.COLOR_BLACK
         term.write(curses.tparm(curses.tigetstr("setaf"), fg))
@@ -586,24 +566,17 @@ if __name__ == "__main__":
     g_lock = threading.Lock()
 
     download()
-    build_stop_timetable(
-        (
-            datetime.datetime.now() - datetime.timedelta(hours=TIMEZONE_OFFSET_HOURS)
-        ).date()
-    )
+    build_stop_timetable((datetime.datetime.now() - datetime.timedelta(hours=5)).date())
     g_tt = load_pickle()
 
     def _build_thread():
         global g_tt
         try:
             while True:
-                sleepUntil(REBUILD_HOUR, 0)
+                sleepUntil(6, 0)
                 download()
                 build_stop_timetable(
-                    (
-                        datetime.datetime.now()
-                        - datetime.timedelta(hours=TIMEZONE_OFFSET_HOURS)
-                    ).date()
+                    (datetime.datetime.now() - datetime.timedelta(hours=5)).date()
                 )
                 with g_lock:
                     g_tt = load_pickle()
