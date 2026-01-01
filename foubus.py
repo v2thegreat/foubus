@@ -505,7 +505,6 @@ def sleepUntil(hour, minute):
     time.sleep((future - t).total_seconds())
 
 
-# Might make sense to replace this with Flask
 class RequestHandler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
