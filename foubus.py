@@ -529,11 +529,12 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
                 try:
                     with open(file_path, "rb") as f:
                         data = f.read()
-                    content_type, _ = mimetypes.guess_type(file_path)
-                    self._send_response(data, content_type)
                 except FileNotFoundError:
                     logger.warning(f"File not found: {file_path}")
                     self._send_response(b"File not found", "text/plain", 404)
+                else:
+                    content_type, _ = mimetypes.guess_type(file_path)
+                    self._send_response(data, content_type)
 
             elif path == "/loading.html":
                 data = "Loading...".encode("utf-8")
