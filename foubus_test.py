@@ -8,7 +8,7 @@ import threading
 import unittest
 
 import pandas as pd
-from loguru import logger
+import logging
 
 import foubus
 
@@ -69,7 +69,7 @@ class FoubusTest(unittest.TestCase):
             tt, now, url="http://localhost:9191/tripUpdates-20250118-162839.pb"
         )
         tt = foubus.next_trips(routes, tt, now)
-        logger.info("Nexts: %s", tt)
+        logging.info("Nexts: %s", tt)
 
         warnings = []
         with open("schedule.html", "w") as f:
