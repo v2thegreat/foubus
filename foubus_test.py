@@ -32,12 +32,12 @@ class FoubusTest(unittest.TestCase):
     def testRealtime(self):
         """
         Collect realtime test data:
-          for _ in $(seq 1 100); do curl -o tripUpdates-$(date +%Y%m%d-%H%M%S).pb https://api.stm.info/pub/od/gtfs-rt/ic/v2/tripUpdates -H 'Apikey: '$(cat stm-apikey.txt)' ; sleep 1h; done
+            for _ in $(seq 1 100); do curl -o tripUpdates-$(date +%Y%m%d-%H%M%S).pb https://api.stm.info/pub/od/gtfs-rt/ic/v2/tripUpdates -H 'Apikey: '$(cat stm-apikey.txt)' ; sleep 1h; done
 
         Inspect:
-          protoc --decode_raw < tripUpdates-20250118-162839.pb | grep '^      5: "' | egrep '"(17|35|36|190|371)"'
+            protoc --decode_raw < tripUpdates-20250118-162839.pb | grep '^      5: "' | egrep '"(17|35|36|190|371)"'
         """
-        now = datetime.datetime.fromisoformat("2025-12-24T17:10:00")
+        now = datetime.datetime.fromisoformat("2025-01-18T17:10:00")
         tt = foubus.load_pickle()
         isodate = (
             tt.iloc[0]["date"][0:4]
